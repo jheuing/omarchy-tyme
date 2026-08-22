@@ -11,6 +11,7 @@ BarWidget {
   implicitHeight: timerButton.implicitHeight
 
   readonly property var timerService: bar && bar.shell ? bar.shell.serviceFor("ch.wertstifter.tyme") : null
+  readonly property bool timerReady: timerService && timerService.initialized
   readonly property var state: timerService ? timerService.state : ({ clients: [], active: null, entries: [], settings: {} })
   property string selectedClientId: ""
   property bool quickListOpen: false
@@ -124,10 +125,14 @@ BarWidget {
   }
   function exportRangeLabel() {
     var range = exportRange()
-    return localShortDate(range.from) + "  -  " + localShortDate(range.to)
+    return exportDate(range.from) + "  -  " + exportDate(range.to)
+  }
+  function exportDate(dateString) {
+    var date = new Date(dateString + "T12:00:00")
+    return (date.getMonth() + 1) + "/" + date.getDate() + "/" + String(date.getFullYear()).slice(-2)
   }
   function loadReport() { if (reportWeek !== "") run(["report", "--week", reportWeek]) }
-  function loadToday(done) { run(["today"], done) }
+  function loadToday(done) { return run(["today"], done) }
   function shiftReportWeek(days) {
     var date = new Date(reportWeek + "T12:00:00")
     date.setDate(date.getDate() + days)
@@ -194,8 +199,8 @@ BarWidget {
   }
   function run(args, done) {
     errorText = ""
-    if (!timerService) return
-    timerService.run(args, function(response) {
+    if (!timerService) return false
+    return timerService.run(args, function(response) {
       if (!response.ok) {
         root.errorText = response.error || "Timer action failed"
         return
@@ -205,7 +210,7 @@ BarWidget {
       if (response.summary) root.exportSummary = response.summary
       if (response.path) root.exportText = "CSV saved to Downloads"
       if (done) done()
-      else if (response.state) Qt.callLater(root.loadToday)
+      if (response.state) Qt.callLater(root.loadToday)
     })
   }
   function refresh() { run(["state"]) }
@@ -351,11 +356,15 @@ BarWidget {
     if (!root.selectedClientId && root.state.clients.length) root.selectedClientId = root.state.clients[0].id
   }
   function loadInitialData() {
-    if (!timerService || initialDataLoaded) return
+    if (!timerReady || initialDataLoaded) return
     initialDataLoaded = true
-    loadToday(function() { Qt.callLater(root.loadReport) })
+    if (!loadToday(function() { Qt.callLater(root.loadReport) })) {
+      initialDataLoaded = false
+      Qt.callLater(root.loadInitialData)
+    }
   }
   onTimerServiceChanged: loadInitialData()
+  onTimerReadyChanged: loadInitialData()
   Component.onCompleted: {
     reportWeek = weekFor(new Date())
     exportCursor = localDateString(new Date())
@@ -1215,7 +1224,7 @@ BarWidget {
       }
       PanelSectionHeader {
         visible: root.activeTab === "export" && root.exportSummary.rows.length > 0
-        text: "COMPANIES"
+        text: "PROJECTS"
         foreground: root.panelForeground
         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
       }

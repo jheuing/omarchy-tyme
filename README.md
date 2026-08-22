@@ -70,6 +70,12 @@ In the Timer tab, add projects in Settings, then choose one and start tracking. 
 
 The daily target defaults to 8 hours and can be changed in Settings. The gauge always spans 10 hours so extra time remains visible.
 
+## Colors
+
+Each project can use either an Omarchy theme color or a custom `#RRGGBB` color. Theme colors update when you change your Omarchy theme; custom colors stay specific to the project.
+
+In Settings, choose how the active menu label is colored: select **Theme** to keep it aligned with the current theme, or **Project** to have it follow the active project's theme or custom color. Select **Plain** for an uncolored label.
+
 ## Data And Privacy
 
 Tyme does not use a network service or an account. Its only runtime dependency is the system `python3` interpreter and Python's standard library.

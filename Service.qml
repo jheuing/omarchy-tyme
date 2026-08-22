@@ -7,6 +7,7 @@ Item {
 
   property var shell: null
   property var state: ({ clients: [], active: null, entries: [], settings: {} })
+  property bool initialized: false
   property var pendingDone: null
   readonly property string helperPath: Qt.resolvedUrl("client_timer.py").toString().replace("file://", "")
 
@@ -30,7 +31,10 @@ Item {
       var response
       try { response = JSON.parse(stdout.text) }
       catch (e) { response = { ok: false, error: stderr.text || "Could not read timer state" } }
-      if (response.ok && response.state) root.state = response.state
+      if (response.ok && response.state) {
+        root.state = response.state
+        root.initialized = true
+      }
       if (done) done(response)
     }
   }
