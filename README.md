@@ -19,7 +19,7 @@ Tyme is a focused, local-first time tracker for the Omarchy bar. Track work by p
 Install from its public repository once published:
 
 ```sh
-omarchy plugin add <repository-url> --enable
+omarchy plugin add https://github.com/jheuing/omarchy-tyme.git --enable
 ```
 
 For local development, place this directory at:
