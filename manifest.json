@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "ch.wertstifter.tyme",
+  "name": "Tyme",
+  "version": "0.1.0",
+  "author": "jh",
+  "license": "MIT",
+  "description": "A focused, local-first Tyme tracker for the Omarchy bar.",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "Panel.qml" },
+  "barWidget": {
+    "displayName": "Tyme",
+    "description": "Start and stop focused client time from the centered bar.",
+    "category": "Productivity",
+    "allowMultiple": false,
+    "defaultSection": "center"
+  }
+}
