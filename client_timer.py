@@ -14,6 +14,8 @@ import uuid
 STATE_DIR = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "omarchy", "client-timer")
 STATE_FILE = os.path.join(STATE_DIR, "state.json")
 COLORS = {"#e06c75", "#d19a66", "#e5c07b", "#98c379", "#56b6c2", "#61afef", "#c678dd"}
+THEME_COLOR_NAMES = ("red", "orange", "yellow", "green", "cyan", "blue", "magenta", "brown")
+THEME_COLORS_FILE = os.path.expanduser("~/.local/state/omarchy/current/theme/colors.toml")
 HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 TIME_OF_DAY = re.compile(r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")
 
@@ -57,6 +59,30 @@ def save(state):
         raise
 
 
+def theme_colors():
+    colors = {"red": "#e06c75", "orange": "#d19a66", "yellow": "#e5c07b", "green": "#98c379",
+              "cyan": "#56b6c2", "blue": "#61afef", "magenta": "#c678dd", "brown": "#8b6f47"}
+    try:
+        with open(THEME_COLORS_FILE, encoding="utf-8") as f:
+            for line in f:
+                match = re.match(r"\s*([a-z_]+)\s*=\s*\"(#[0-9a-fA-F]{6})\"", line)
+                if match and match.group(1) in colors:
+                    colors[match.group(1)] = match.group(2).lower()
+    except FileNotFoundError:
+        pass
+    return colors
+
+
+def resolve_color(color, palette):
+    if color.startswith("theme:"):
+        return palette.get(color[6:], palette["blue"])
+    return color
+
+
+def valid_color(color):
+    return HEX_COLOR.fullmatch(color) or color in {"theme:" + name for name in THEME_COLOR_NAMES}
+
+
 def client(state, client_id):
     for item in state["clients"]:
         if item["id"] == client_id:
@@ -65,7 +91,14 @@ def client(state, client_id):
 
 
 def view(state):
-    return {"settings": state["settings"], "clients": state["clients"], "active": state["active"], "entries": state["entries"][:8]}
+    palette = theme_colors()
+    clients = []
+    for item in state["clients"]:
+        visible = dict(item)
+        visible["colorToken"] = item["color"]
+        visible["color"] = resolve_color(item["color"], palette)
+        clients.append(visible)
+    return {"settings": state["settings"], "themeColors": palette, "clients": clients, "active": state["active"], "entries": state["entries"][:8]}
 
 
 def cmd_init(_):
@@ -83,8 +116,8 @@ def cmd_client_add(args):
     name = args.name.strip()
     if not name:
         raise Error("Client name is required")
-    if not HEX_COLOR.fullmatch(args.color):
-        raise Error("Company color must be a #RRGGBB value")
+    if not valid_color(args.color):
+        raise Error("Project color must be a theme color or #RRGGBB value")
     if any(item["name"].casefold() == name.casefold() for item in state["clients"]):
         raise Error("A client with that name already exists")
     state["clients"].append({"id": uuid.uuid4().hex, "name": name, "color": args.color.lower(), "createdAt": now()})
@@ -97,8 +130,8 @@ def cmd_client_update(args):
     name = args.name.strip()
     if not name:
         raise Error("Company name is required")
-    if not HEX_COLOR.fullmatch(args.color):
-        raise Error("Company color must be a #RRGGBB value")
+    if not valid_color(args.color):
+        raise Error("Project color must be a theme color or #RRGGBB value")
     target = client(state, args.id)
     if any(item["id"] != target["id"] and item["name"].casefold() == name.casefold() for item in state["clients"]):
         raise Error("A company with that name already exists")
@@ -237,13 +270,14 @@ def cmd_summary(args):
     state = load()
     entries = entries_for_range(state, args.from_date, args.to_date)
     companies = {item["id"]: item for item in state["clients"]}
+    palette = theme_colors()
     totals = {}
     for entry in entries:
         totals[entry["clientId"]] = totals.get(entry["clientId"], 0) + entry["seconds"]
     rows = [{
         "clientId": client_id,
         "name": companies.get(client_id, {}).get("name", "Deleted company"),
-        "color": companies.get(client_id, {}).get("color", "#61afef"),
+        "color": resolve_color(companies.get(client_id, {}).get("color", "#61afef"), palette),
         "seconds": seconds,
     } for client_id, seconds in totals.items()]
     rows.sort(key=lambda row: row["seconds"], reverse=True)
@@ -270,15 +304,16 @@ def cmd_today(_):
         local_start = start.astimezone()
         segments.append({"clientId": active["clientId"], "startSeconds": local_start.hour * 3600 + local_start.minute * 60 + local_start.second, "seconds": seconds})
     companies = {item["id"]: item for item in state["clients"]}
+    palette = theme_colors()
     rows = [{
         "clientId": client_id,
         "name": companies.get(client_id, {}).get("name", "Deleted company"),
-        "color": companies.get(client_id, {}).get("color", "#61afef"),
+        "color": resolve_color(companies.get(client_id, {}).get("color", "#61afef"), palette),
         "seconds": seconds,
     } for client_id, seconds in totals.items()]
     rows.sort(key=lambda row: row["seconds"], reverse=True)
     for segment in segments:
-        segment["color"] = companies.get(segment["clientId"], {}).get("color", "#61afef")
+        segment["color"] = resolve_color(companies.get(segment["clientId"], {}).get("color", "#61afef"), palette)
     return {"today": {"rows": rows, "segments": segments, "seconds": sum(totals.values())}}
 
 
@@ -296,6 +331,7 @@ def cmd_report(args):
     day_companies = {day: {} for day in day_seconds}
     company_seconds = {}
     companies = {item["id"]: item for item in state["clients"]}
+    palette = theme_colors()
 
     for entry in state["entries"]:
         entry_day = dt.datetime.fromisoformat(entry["start"]).astimezone().date()
@@ -313,7 +349,7 @@ def cmd_report(args):
         rows.append({
             "clientId": company_id,
             "name": company.get("name", "Deleted company"),
-            "color": company.get("color", "#61afef"),
+            "color": resolve_color(company.get("color", "#61afef"), palette),
             "seconds": seconds,
         })
     rows.sort(key=lambda row: row["seconds"], reverse=True)
@@ -328,7 +364,7 @@ def cmd_report(args):
             "seconds": day_seconds[day],
             "segments": [{
                 "clientId": company_id,
-                "color": companies.get(company_id, {}).get("color", "#61afef"),
+                "color": resolve_color(companies.get(company_id, {}).get("color", "#61afef"), palette),
                 "seconds": seconds,
             } for company_id, seconds in sorted(day_companies[day].items(), key=lambda item: item[1], reverse=True)],
         } for day in day_seconds],

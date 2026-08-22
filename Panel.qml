@@ -36,13 +36,46 @@ BarWidget {
   readonly property bool running: active !== null
   readonly property bool paused: running && active.pausedAt !== null
   readonly property color panelForeground: bar ? bar.foreground : Color.foreground
-  readonly property var companyColors: ["#e06c75", "#d19a66", "#e5c07b", "#98c379", "#56b6c2", "#61afef", "#c678dd"]
+  readonly property var themeColorOptions: [
+    { value: "theme:red", label: "Color 1" }, { value: "theme:orange", label: "Color 2" },
+    { value: "theme:yellow", label: "Color 3" }, { value: "theme:green", label: "Color 4" },
+    { value: "theme:cyan", label: "Color 5" }, { value: "theme:blue", label: "Color 6" },
+    { value: "theme:magenta", label: "Color 7" }, { value: "theme:brown", label: "Color 8" }
+  ]
 
   SystemClock { id: clock; precision: SystemClock.Seconds; enabled: root.running }
+
+  FileView {
+    path: Quickshell.env("HOME") + "/.local/state/omarchy/current/theme/colors.toml"
+    watchChanges: true
+    printErrors: false
+    onLoaded: if (root.state.clients.length) root.refresh()
+    onFileChanged: reload()
+  }
+  Timer {
+    id: themeColorRefresh
+    interval: 250
+    repeat: false
+    onTriggered: {
+      if (helper.running) restart()
+      else root.refresh()
+    }
+  }
+  Connections {
+    target: Color
+    function onAccentChanged() { themeColorRefresh.restart() }
+    function onForegroundChanged() { themeColorRefresh.restart() }
+    function onBackgroundChanged() { themeColorRefresh.restart() }
+  }
 
   function clientFor(id) {
     for (var i = 0; i < state.clients.length; i++) if (state.clients[i].id === id) return state.clients[i]
     return null
+  }
+  function resolvedCompanyColor(color) {
+    if (String(color).indexOf("theme:") === 0)
+      return state.themeColors ? state.themeColors[String(color).slice(6)] || Color.accent : Color.accent
+    return color
   }
   function elapsed() {
     if (!active) return 0
@@ -218,14 +251,15 @@ BarWidget {
     editingClientId = clientId
     companyEditorOpen = true
     companyName.text = company.name
-    companyColor.value = root.companyColors.indexOf(company.color) >= 0 ? company.color : "custom"
-    customCompanyColor.text = companyColor.value === "custom" ? company.color : ""
+    var color = company.colorToken || company.color
+    companyColor.value = String(color).indexOf("theme:") === 0 ? color : "custom"
+    customCompanyColor.text = companyColor.value === "custom" ? color : ""
   }
   function newCompany() {
     editingClientId = ""
     companyEditorOpen = true
     companyName.text = ""
-    companyColor.value = "#61afef"
+    companyColor.value = "theme:blue"
     customCompanyColor.text = ""
     companyName.forceActiveFocus()
   }
@@ -1039,8 +1073,7 @@ BarWidget {
             height: width
             radius: width / 2
             color: root.editingClientId === modelData.id
-              && /^#[0-9a-fA-F]{6}$/.test(root.editedCompanyColor())
-              ? root.editedCompanyColor() : modelData.color
+              ? root.resolvedCompanyColor(root.editedCompanyColor()) : modelData.color
             anchors.left: parent.left
             anchors.leftMargin: Style.space(12)
             anchors.verticalCenter: parent.verticalCenter
@@ -1060,7 +1093,7 @@ BarWidget {
         width: parent.width
         label: "Company color"
         value: "#61afef"
-        options: root.companyColors.concat([{ value: "custom", label: "Custom color..." }])
+        options: root.themeColorOptions.concat([{ value: "custom", label: "Custom color..." }])
       }
       TextField {
         id: customCompanyColor
