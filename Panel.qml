@@ -64,9 +64,9 @@ BarWidget {
   }
   Connections {
     target: Color
-    function onAccentChanged() { themeColorRefresh.restart() }
-    function onForegroundChanged() { themeColorRefresh.restart() }
-    function onBackgroundChanged() { themeColorRefresh.restart() }
+    function onAccentChanged() { themeColorRefresh.restart(); todayDonut.requestPaint() }
+    function onForegroundChanged() { themeColorRefresh.restart(); todayDonut.requestPaint() }
+    function onBackgroundChanged() { themeColorRefresh.restart(); todayDonut.requestPaint() }
   }
 
   function clientFor(id) {
@@ -710,7 +710,8 @@ BarWidget {
                 var segmentStart = start + sweep * offset / gaugeSeconds
                 var segmentEnd = start + sweep * (offset + seconds) / gaugeSeconds
                 context.beginPath()
-                context.strokeStyle = rows[i].color
+                var company = root.clientFor(rows[i].clientId)
+                context.strokeStyle = company ? company.color : rows[i].color
                 context.arc(width / 2, height / 2, radius,
                   segmentStart + separatorAngle / 2,
                   Math.max(segmentStart + separatorAngle / 2, segmentEnd - separatorAngle / 2))
@@ -732,6 +733,10 @@ BarWidget {
               context.fillStyle = Color.muted
               context.font = "bold " + Style.font.caption + "px sans-serif"
               context.fillText(root.workdayDifferenceLabel(root.todaySummary.seconds), width / 2, height / 2 + Style.space(10))
+            }
+            Connections {
+              target: root
+              function onStateChanged() { todayDonut.requestPaint() }
             }
           }
 
