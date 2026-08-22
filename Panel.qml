@@ -722,8 +722,8 @@ BarWidget {
               context.beginPath()
               context.strokeStyle = Color.foreground
               context.lineWidth = Style.space(2)
-              context.moveTo(width / 2 + Math.cos(tick) * (radius - Style.space(10)), height / 2 + Math.sin(tick) * (radius - Style.space(10)))
-              context.lineTo(width / 2 + Math.cos(tick) * (radius + Style.space(10)), height / 2 + Math.sin(tick) * (radius + Style.space(10)))
+              context.moveTo(width / 2 + Math.cos(tick) * (radius - Style.space(16)), height / 2 + Math.sin(tick) * (radius - Style.space(16)))
+              context.lineTo(width / 2 + Math.cos(tick) * (radius + Style.space(16)), height / 2 + Math.sin(tick) * (radius + Style.space(16)))
               context.stroke()
               context.textAlign = "center"
               context.textBaseline = "middle"
