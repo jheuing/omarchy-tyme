@@ -61,7 +61,7 @@ hyprctl reload
 
 - `SUPER + Y`: Open or close Tyme when the optional shortcut is configured.
 - `Escape`: Close the Tyme panel.
-- Left and Right arrows: Move between Timer, Reports, Export, and Settings when panel navigation has focus.
+- Left and Right arrows: Move between Timer, Reports, Export, and Settings, including while using the Timer project selector.
 - Up and Down arrows: Move through visible project matches in the Timer project selector.
 - `Enter` in the project selector: Start or switch to the selected project. With an active timer and no selected project, it stops the timer.
 - `Enter` in the daily target or project name field: Save that field.

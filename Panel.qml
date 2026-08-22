@@ -618,6 +618,12 @@ BarWidget {
           } else if (event.key === Qt.Key_Up) {
             root.moveQuickCompany(-1)
             event.accepted = true
+          } else if (event.key === Qt.Key_Left) {
+            root.cycleTab(-1)
+            event.accepted = true
+          } else if (event.key === Qt.Key_Right) {
+            root.cycleTab(1)
+            event.accepted = true
           }
         }
       }
