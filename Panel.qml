@@ -659,13 +659,10 @@ BarWidget {
         foreground: root.panelForeground
         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
       }
-      BorderSurface {
+      Item {
         visible: root.activeTab === "timer"
         width: parent.width
         implicitHeight: Math.max(todayDonut.implicitHeight, todayLegend.implicitHeight) + Style.space(16)
-        color: Style.normalFillFor(root.panelForeground, Color.accent)
-        borderSpec: Border.controlSpec("normal", root.panelForeground, Color.accent)
-        radius: Style.space(4)
 
         Row {
           anchors.fill: parent
@@ -690,23 +687,26 @@ BarWidget {
               var gaugeSeconds = 10 * 3600
               var start = Math.PI * 0.75
               var sweep = Math.PI * 1.5
-              var radius = Math.min(width, height) / 2 - Style.space(18)
+              var radius = Math.min(width, height) / 2 - Style.space(12)
               context.clearRect(0, 0, width, height)
-              context.lineWidth = Style.space(14)
+              context.lineWidth = Style.space(24)
               context.lineCap = "butt"
               context.beginPath()
               context.strokeStyle = Color.muted
               context.arc(width / 2, height / 2, radius, start, start + sweep)
               context.stroke()
               var offset = 0
+              var separatorAngle = Style.space(2) / radius
               for (var i = 0; i < rows.length; i++) {
                 var seconds = Math.max(0, Math.min(rows[i].seconds, gaugeSeconds - offset))
                 if (seconds <= 0) break
+                var segmentStart = start + sweep * offset / gaugeSeconds
+                var segmentEnd = start + sweep * (offset + seconds) / gaugeSeconds
                 context.beginPath()
                 context.strokeStyle = rows[i].color
                 context.arc(width / 2, height / 2, radius,
-                  start + sweep * offset / gaugeSeconds,
-                  start + sweep * (offset + seconds) / gaugeSeconds)
+                  segmentStart + separatorAngle / 2,
+                  Math.max(segmentStart + separatorAngle / 2, segmentEnd - separatorAngle / 2))
                 context.stroke()
                 offset += seconds
               }
