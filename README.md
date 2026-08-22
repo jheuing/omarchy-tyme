@@ -37,18 +37,18 @@ omarchy restart shell
 
 ## Use
 
-Click the Tyme item in the bar, or assign a shortcut such as `SUPER + Y` to:
+Click the Tyme item in the bar, or assign a shortcut such as `SUPER + CTRL + Y` to:
 
 ```sh
 omarchy-shell shell toggle ch.wertstifter.tyme
 ```
 
-### Optional `SUPER + Y` Shortcut
+### Optional `SUPER + CTRL + Y` Shortcut
 
 Add this line to `~/.config/hypr/bindings.lua`:
 
 ```lua
-o.bind("SUPER + Y", "Tyme", "omarchy-shell shell toggle ch.wertstifter.tyme")
+o.bind("SUPER + CTRL + Y", "Tyme", "omarchy-shell shell toggle ch.wertstifter.tyme")
 ```
 
 Reload Hyprland after saving the binding:
@@ -59,7 +59,7 @@ hyprctl reload
 
 ## Keyboard Interactions
 
-- `SUPER + Y`: Open or close Tyme when the optional shortcut is configured.
+- `SUPER + CTRL + Y`: Open or close Tyme when the optional shortcut is configured.
 - `Escape`: Close the Tyme panel.
 - Left and Right arrows: Move between Timer, Reports, Export, and Settings, including while using the Timer project selector.
 - Up and Down arrows: Move through visible project matches in the Timer project selector.
