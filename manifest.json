@@ -6,8 +6,8 @@
   "author": "Jan-Hendrik Heuing",
   "license": "MIT",
   "description": "A focused, local-first time tracker for the Omarchy bar.",
-  "kinds": ["bar-widget"],
-  "entryPoints": { "barWidget": "Panel.qml" },
+  "kinds": ["bar-widget", "service"],
+  "entryPoints": { "barWidget": "Panel.qml", "service": "Service.qml" },
   "barWidget": {
     "displayName": "Tyme",
     "description": "Start and stop focused client time from the centered bar.",

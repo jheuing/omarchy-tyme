@@ -10,7 +10,8 @@ BarWidget {
   implicitWidth: timerButton.implicitWidth
   implicitHeight: timerButton.implicitHeight
 
-  property var state: ({ clients: [], active: null, entries: [] })
+  readonly property var timerService: bar && bar.shell ? bar.shell.serviceFor("ch.wertstifter.tyme") : null
+  readonly property var state: timerService ? timerService.state : ({ clients: [], active: null, entries: [], settings: {} })
   property string selectedClientId: ""
   property bool quickListOpen: false
   property bool quickSelectionArmed: false
@@ -19,19 +20,18 @@ BarWidget {
   property bool companyEditorOpen: false
   property string errorText: ""
   property string exportText: ""
-  property var pendingDone: null
   property string reportWeek: ""
   property var report: ({ weekStart: "", weekEnd: "", weekNumber: 0, month: "", days: [], monthRows: [], monthTotalSeconds: 0 })
   property var todaySummary: ({ rows: [], seconds: 0 })
   property string exportPeriod: "week"
   property string exportCursor: ""
   property var exportSummary: ({ count: 0, seconds: 0, rows: [] })
+  property bool initialDataLoaded: false
   property int workdayHoursSetting: 8
   property string menuLabelStyle: "project"
   readonly property bool opened: panelController.open
   property bool popoutSwitchClosing: false
   readonly property real openPanelIndicatorWidth: timerButton.labelWidth
-  readonly property string helperPath: Qt.resolvedUrl("client_timer.py").toString().replace("file://", "")
   readonly property var active: state.active
   readonly property bool running: active !== null
   readonly property bool paused: running && active.pausedAt !== null
@@ -193,13 +193,20 @@ BarWidget {
     return brightness > 150 ? "#1a1b26" : "#f7f7f7"
   }
   function run(args, done) {
-    if (helper.running) return
     errorText = ""
-    pendingDone = done || null
-    helper.stdout = out.createObject(helper)
-    helper.stderr = err.createObject(helper)
-    helper.command = ["python3", helperPath].concat(args)
-    helper.running = true
+    if (!timerService) return
+    timerService.run(args, function(response) {
+      if (!response.ok) {
+        root.errorText = response.error || "Timer action failed"
+        return
+      }
+      if (response.report) root.report = response.report
+      if (response.today) root.todaySummary = response.today
+      if (response.summary) root.exportSummary = response.summary
+      if (response.path) root.exportText = "CSV saved to Downloads"
+      if (done) done()
+      else if (response.state) Qt.callLater(root.loadToday)
+    })
   }
   function refresh() { run(["state"]) }
   function matchingCompanies(query) {
@@ -228,6 +235,7 @@ BarWidget {
     }
     selectedClientId = company.id
     run([running ? "switch" : "start", "--client-id", company.id, "--note", noteField.text])
+    root.close()
     quickListOpen = false
     quickCompanyField.text = ""
     selectedClientId = ""
@@ -337,37 +345,21 @@ BarWidget {
     }
   }
 
-  Component { id: out; StdioCollector {} }
-  Component { id: err; StdioCollector {} }
-  Process {
-    id: helper
-    onExited: {
-      var done = root.pendingDone
-      root.pendingDone = null
-      var response
-      try { response = JSON.parse(stdout.text) } catch (e) { response = { ok: false, error: stderr.text || "Could not read timer state" } }
-      if (response.ok) {
-        if (response.state) {
-          root.state = response.state
-          root.workdayHoursSetting = Number(root.state.settings.workdayHours) || 8
-          root.menuLabelStyle = root.state.settings.menuLabelStyle || "project"
-          if (!root.selectedClientId && root.state.clients.length) root.selectedClientId = root.state.clients[0].id
-        }
-        if (response.report) root.report = response.report
-        if (response.today) root.todaySummary = response.today
-        if (response.summary) root.exportSummary = response.summary
-        if (response.path) root.exportText = "CSV saved to Downloads"
-      } else root.errorText = response.error || "Timer action failed"
-      if (response.ok && done) done()
-      else if (response.ok && response.state) Qt.callLater(root.loadToday)
-    }
+  onStateChanged: {
+    root.workdayHoursSetting = Number(root.state.settings.workdayHours) || 8
+    root.menuLabelStyle = root.state.settings.menuLabelStyle || "project"
+    if (!root.selectedClientId && root.state.clients.length) root.selectedClientId = root.state.clients[0].id
   }
+  function loadInitialData() {
+    if (!timerService || initialDataLoaded) return
+    initialDataLoaded = true
+    loadToday(function() { Qt.callLater(root.loadReport) })
+  }
+  onTimerServiceChanged: loadInitialData()
   Component.onCompleted: {
     reportWeek = weekFor(new Date())
     exportCursor = localDateString(new Date())
-    run(["init"], function() {
-      Qt.callLater(function() { root.loadToday(function() { Qt.callLater(root.loadReport) }) })
-    })
+    Qt.callLater(root.loadInitialData)
   }
 
   WidgetButton {
