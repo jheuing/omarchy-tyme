@@ -2,7 +2,7 @@
 
 Tyme is a focused, local-first time tracker for the Omarchy bar. Track work by project, keep an eye on today's progress, review weekly and monthly activity, and export records when needed.
 
-![Tyme timer](assets/preview.png)
+![Tyme timer](preview.png)
 
 ## Highlights
 
