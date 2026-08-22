@@ -13,6 +13,7 @@ BarWidget {
   property var state: ({ clients: [], active: null, entries: [] })
   property string selectedClientId: ""
   property bool quickListOpen: false
+  property bool quickSelectionArmed: false
   property string activeTab: "timer"
   property string editingClientId: ""
   property bool companyEditorOpen: false
@@ -182,6 +183,7 @@ BarWidget {
   }
   function selectQuickCompany(company) {
     selectedClientId = company.id
+    quickSelectionArmed = true
     quickCompanyField.forceActiveFocus()
   }
   function primaryTimerAction(stopWhenEmpty) {
@@ -196,6 +198,7 @@ BarWidget {
     quickListOpen = false
     quickCompanyField.text = ""
     selectedClientId = ""
+    quickSelectionArmed = false
     noteField.text = ""
   }
   function moveQuickCompany(delta) {
@@ -207,6 +210,7 @@ BarWidget {
       if (matches[i].id === selectedClientId) { index = i; break }
     index = index < 0 ? (delta > 0 ? 0 : matches.length - 1) : (index + delta + matches.length) % matches.length
     selectedClientId = matches[index].id
+    quickSelectionArmed = true
   }
   function editCompany(clientId) {
     var company = clientFor(clientId)
@@ -561,9 +565,16 @@ BarWidget {
         onTextChanged: {
           var company = root.companyForQuery(text)
           root.selectedClientId = company ? company.id : ""
+          if (text.trim() === "") root.quickSelectionArmed = false
         }
-        onTextEdited: root.quickListOpen = true
-        onAccepted: root.primaryTimerAction(true)
+        onTextEdited: {
+          root.quickListOpen = true
+          root.quickSelectionArmed = true
+        }
+        onAccepted: {
+          if (root.running && !root.quickSelectionArmed) root.run(["stop"])
+          else root.primaryTimerAction(false)
+        }
         TapHandler { onTapped: root.quickListOpen = true }
         Keys.onPressed: function(event) {
           if (event.key === Qt.Key_Down) {
