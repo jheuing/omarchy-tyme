@@ -18,6 +18,13 @@ THEME_COLOR_NAMES = ("red", "orange", "yellow", "green", "cyan", "blue", "magent
 THEME_COLORS_FILE = os.path.expanduser("~/.local/state/omarchy/current/theme/colors.toml")
 HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 TIME_OF_DAY = re.compile(r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")
+MAX_STATE_BYTES = 256 * 1024
+MAX_RESPONSE_BYTES = 1024 * 1024
+MAX_CLIENTS = 500
+MAX_ENTRIES = 5000
+MAX_NAME_LENGTH = 256
+MAX_NOTE_LENGTH = 1024
+MAX_ID_LENGTH = 64
 
 
 class Error(Exception):
@@ -32,25 +39,132 @@ def default_state():
     return {"version": 1, "settings": {"workdayHours": 8, "menuLabelStyle": "project"}, "clients": [], "active": None, "entries": []}
 
 
+def require_object(value, label):
+    if not isinstance(value, dict):
+        raise Error(f"Timer state has an invalid {label}")
+    return value
+
+
+def require_list(value, label, maximum):
+    if not isinstance(value, list) or len(value) > maximum:
+        raise Error(f"Timer state has an invalid {label}")
+    return value
+
+
+def require_string(value, label, maximum):
+    if not isinstance(value, str) or not value or len(value) > maximum:
+        raise Error(f"Timer state has an invalid {label}")
+    return value
+
+
+def require_timestamp(value, label):
+    value = require_string(value, label, 64)
+    try:
+        dt.datetime.fromisoformat(value)
+    except ValueError:
+        raise Error(f"Timer state has an invalid {label}")
+    return value
+
+
+def validate_client(value):
+    value = require_object(value, "client")
+    color = require_string(value.get("color"), "client color", 32).lower()
+    name = require_string(value.get("name"), "client name", MAX_NAME_LENGTH)
+    if not valid_color(color):
+        raise Error("Timer state has an invalid client color")
+    if "<" in name:
+        raise Error("Timer state has an invalid client name")
+    return {
+        "id": require_string(value.get("id"), "client id", MAX_ID_LENGTH),
+        "name": name,
+        "color": color,
+        "createdAt": require_timestamp(value.get("createdAt"), "client creation time"),
+    }
+
+
+def validate_entry(value):
+    value = require_object(value, "entry")
+    seconds = value.get("seconds")
+    if type(seconds) is not int or seconds < 0:
+        raise Error("Timer state has an invalid entry duration")
+    return {
+        "id": require_string(value.get("id"), "entry id", MAX_ID_LENGTH),
+        "clientId": require_string(value.get("clientId"), "entry client id", MAX_ID_LENGTH),
+        "note": require_string(value.get("note", ""), "entry note", MAX_NOTE_LENGTH) if value.get("note", "") else "",
+        "start": require_timestamp(value.get("start"), "entry start time"),
+        "end": require_timestamp(value.get("end"), "entry end time"),
+        "seconds": seconds,
+    }
+
+
+def validate_active(value):
+    if value is None:
+        return None
+    value = require_object(value, "active timer")
+    paused_seconds = value.get("pausedSeconds")
+    if type(paused_seconds) is not int or paused_seconds < 0:
+        raise Error("Timer state has an invalid paused duration")
+    paused_at = value.get("pausedAt")
+    if paused_at is not None:
+        paused_at = require_timestamp(paused_at, "pause time")
+    return {
+        "id": require_string(value.get("id"), "active timer id", MAX_ID_LENGTH),
+        "clientId": require_string(value.get("clientId"), "active timer client id", MAX_ID_LENGTH),
+        "note": require_string(value.get("note", ""), "active timer note", MAX_NOTE_LENGTH) if value.get("note", "") else "",
+        "start": require_timestamp(value.get("start"), "active timer start time"),
+        "pausedAt": paused_at,
+        "pausedSeconds": paused_seconds,
+    }
+
+
+def validate_state(value):
+    value = require_object(value, "root object")
+    settings = require_object(value.get("settings", {}), "settings")
+    workday_hours = settings.get("workdayHours", 8)
+    menu_label_style = settings.get("menuLabelStyle", "project")
+    if type(workday_hours) is not int or not 1 <= workday_hours <= 10:
+        raise Error("Timer state has an invalid workday target")
+    if menu_label_style not in {"project", "theme", "plain"}:
+        raise Error("Timer state has an invalid menu label style")
+    clients = [validate_client(item) for item in require_list(value.get("clients", []), "clients", MAX_CLIENTS)]
+    if len({item["id"] for item in clients}) != len(clients):
+        raise Error("Timer state has duplicate client ids")
+    entries = [validate_entry(item) for item in require_list(value.get("entries", []), "entries", MAX_ENTRIES)]
+    active = validate_active(value.get("active"))
+    return {
+        "version": 1,
+        "settings": {"workdayHours": workday_hours, "menuLabelStyle": menu_label_style},
+        "clients": clients,
+        "active": active,
+        "entries": entries,
+    }
+
+
 def load():
     try:
         with open(STATE_FILE, encoding="utf-8") as f:
-            state = json.load(f)
+            source = f.read(MAX_STATE_BYTES + 1)
     except FileNotFoundError:
         return default_state()
-    state.setdefault("settings", {"workdayHours": 8})
-    state["settings"].setdefault("workdayHours", 8)
-    state["settings"].setdefault("menuLabelStyle", "project")
-    return state
+    except (OSError, UnicodeDecodeError) as error:
+        raise Error(f"Could not read timer state: {getattr(error, 'strerror', None) or error}")
+    if len(source.encode("utf-8")) > MAX_STATE_BYTES:
+        raise Error("Timer state is too large")
+    try:
+        return validate_state(json.loads(source))
+    except (json.JSONDecodeError, RecursionError):
+        raise Error("Timer state is not valid JSON")
 
 
 def save(state):
+    serialized = json.dumps(state, indent=2) + "\n"
+    if len(serialized.encode("utf-8")) > MAX_STATE_BYTES:
+        raise Error("Timer state is too large")
     os.makedirs(STATE_DIR, exist_ok=True)
     fd, temp = tempfile.mkstemp(prefix=".tmp.", dir=STATE_DIR)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(state, f, indent=2)
-            f.write("\n")
+            f.write(serialized)
             f.flush()
             os.fsync(f.fileno())
         os.replace(temp, STATE_FILE)
@@ -116,6 +230,10 @@ def cmd_client_add(args):
     name = args.name.strip()
     if not name:
         raise Error("Client name is required")
+    if len(name) > MAX_NAME_LENGTH:
+        raise Error(f"Client name must be at most {MAX_NAME_LENGTH} characters")
+    if "<" in name:
+        raise Error("Client name cannot contain '<'")
     if not valid_color(args.color):
         raise Error("Project color must be a theme color or #RRGGBB value")
     if any(item["name"].casefold() == name.casefold() for item in state["clients"]):
@@ -130,6 +248,10 @@ def cmd_client_update(args):
     name = args.name.strip()
     if not name:
         raise Error("Company name is required")
+    if len(name) > MAX_NAME_LENGTH:
+        raise Error(f"Company name must be at most {MAX_NAME_LENGTH} characters")
+    if "<" in name:
+        raise Error("Company name cannot contain '<'")
     if not valid_color(args.color):
         raise Error("Project color must be a theme color or #RRGGBB value")
     target = client(state, args.id)
@@ -162,7 +284,10 @@ def cmd_start(args):
     if state["active"]:
         raise Error("A timer is already running")
     client(state, args.client_id)
-    state["active"] = {"id": uuid.uuid4().hex, "clientId": args.client_id, "note": args.note.strip(), "start": now(), "pausedAt": None, "pausedSeconds": 0}
+    note = args.note.strip()
+    if len(note) > MAX_NOTE_LENGTH:
+        raise Error(f"Note must be at most {MAX_NOTE_LENGTH} characters")
+    state["active"] = {"id": uuid.uuid4().hex, "clientId": args.client_id, "note": note, "start": now(), "pausedAt": None, "pausedSeconds": 0}
     save(state)
     return {"state": view(state)}
 
@@ -184,10 +309,13 @@ def finish_active(state, end):
 def cmd_switch(args):
     state = load()
     client(state, args.client_id)
+    note = args.note.strip()
+    if len(note) > MAX_NOTE_LENGTH:
+        raise Error(f"Note must be at most {MAX_NOTE_LENGTH} characters")
     started = now()
     finish_active(state, started)
     state["active"] = {
-        "id": uuid.uuid4().hex, "clientId": args.client_id, "note": args.note.strip(),
+        "id": uuid.uuid4().hex, "clientId": args.client_id, "note": note,
         "start": started, "pausedAt": None, "pausedSeconds": 0,
     }
     save(state)
@@ -421,7 +549,10 @@ def main():
     report.set_defaults(func=cmd_report)
     args = parser.parse_args()
     try:
-        print(json.dumps({"ok": True, **args.func(args)}))
+        response = json.dumps({"ok": True, **args.func(args)})
+        if len(response.encode("ascii")) > MAX_RESPONSE_BYTES:
+            raise Error("Timer response is too large")
+        print(response)
     except Error as error:
         print(json.dumps({"ok": False, "error": str(error)}))
         sys.exit(1)

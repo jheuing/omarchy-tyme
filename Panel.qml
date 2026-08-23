@@ -408,6 +408,7 @@ BarWidget {
         anchors.centerIn: parent
         text: "\uf520 " + (root.active && root.clientFor(root.active.clientId)
           ? root.clientFor(root.active.clientId).name : "Company")
+        textFormat: Text.PlainText
         color: root.menuLabelStyle === "plain" ? root.panelForeground : root.labelTextColor(parent.color)
         font.family: timerButton.fontFamily
         font.pixelSize: Style.font.bodySmall
@@ -525,6 +526,7 @@ BarWidget {
                 anchors.centerIn: parent
                 width: parent.width - Style.space(14)
                 text: root.active && root.clientFor(root.active.clientId) ? root.clientFor(root.active.clientId).name : "Project"
+                textFormat: Text.PlainText
                 color: root.labelTextColor(parent.color)
                 font.family: root.bar ? root.bar.fontFamily : Style.font.family
                 font.pixelSize: Style.font.bodySmall
@@ -762,6 +764,7 @@ BarWidget {
                 Text {
                   width: parent.width - parent.children[0].width - timeLabel.implicitWidth - 2 * parent.spacing
                   text: modelData.name
+                  textFormat: Text.PlainText
                   color: root.panelForeground
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
                   font.pixelSize: Style.font.caption
@@ -1000,6 +1003,7 @@ BarWidget {
             Text {
               width: parent.width - companyHours.implicitWidth - parent.spacing
               text: modelData.name
+              textFormat: Text.PlainText
               color: modelData.color
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.bodySmall
@@ -1255,6 +1259,7 @@ BarWidget {
           Text {
             width: parent.width - parent.children[0].width - companyTotal.implicitWidth - 2 * parent.spacing
             text: modelData.name
+            textFormat: Text.PlainText
             color: root.panelForeground
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             font.pixelSize: Style.font.bodySmall
