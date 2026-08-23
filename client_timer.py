@@ -13,6 +13,7 @@ import uuid
 
 STATE_DIR = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "omarchy", "client-timer")
 STATE_FILE = os.path.join(STATE_DIR, "state.json")
+RANKS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ranks.csv")
 COLORS = {"#e06c75", "#d19a66", "#e5c07b", "#98c379", "#56b6c2", "#61afef", "#c678dd"}
 THEME_COLOR_NAMES = ("red", "orange", "yellow", "green", "cyan", "blue", "magenta", "brown")
 THEME_COLORS_FILE = os.path.expanduser("~/.local/state/omarchy/current/theme/colors.toml")
@@ -204,6 +205,80 @@ def client(state, client_id):
     raise Error("Client not found")
 
 
+def parse_hhmmss(text):
+    parts = text.strip().split(":")
+    if len(parts) != 3:
+        raise ValueError(f"invalid time {text.strip()!r}")
+    hours = int(parts[0])
+    minutes = int(parts[1])
+    seconds = int(parts[2])
+    if hours < 0 or not 0 <= minutes < 60 or not 0 <= seconds < 60:
+        raise ValueError(f"invalid time {text.strip()!r}")
+    return hours * 3600 + minutes * 60 + seconds
+
+
+_ranks_cache = None
+
+
+def load_ranks():
+    global _ranks_cache
+    if _ranks_cache is not None:
+        return _ranks_cache
+    ranks = []
+    try:
+        with open(RANKS_FILE, encoding="utf-8") as f:
+            rows = list(csv.reader(f))
+        for row in rows[1:]:
+            if len(row) < 5 or not row[0].strip():
+                continue
+            ranks.append({"name": row[0].strip(), "divisions": [parse_hhmmss(value) for value in row[1:5]]})
+    except (OSError, ValueError):
+        ranks = []
+    _ranks_cache = ranks
+    return ranks
+
+
+def lifetime_seconds(state):
+    total = sum(max(0, int(entry["seconds"])) for entry in state["entries"])
+    active = state["active"]
+    if active:
+        end = dt.datetime.fromisoformat(active["pausedAt"] or now())
+        start = dt.datetime.fromisoformat(active["start"])
+        total += max(0, int((end - start).total_seconds()) - active["pausedSeconds"])
+    return total
+
+
+def determine_rank(total_seconds):
+    steps = []
+    for rank in load_ranks():
+        for index, seconds in enumerate(rank["divisions"]):
+            steps.append({"name": rank["name"], "division": index + 1, "seconds": seconds})
+    if not steps:
+        return None
+    match_index = 0
+    for index, step in enumerate(steps):
+        if total_seconds >= step["seconds"]:
+            match_index = index
+    match = steps[match_index]
+    result = {
+        "totalSeconds": total_seconds,
+        "name": match["name"],
+        "division": match["division"],
+        "tier": match["name"].split(" ")[0],
+        "currentThreshold": match["seconds"],
+        "nextName": None,
+        "nextThreshold": None,
+        "progress": None,
+    }
+    if match_index + 1 < len(steps):
+        following = steps[match_index + 1]
+        span = following["seconds"] - match["seconds"]
+        result["nextName"] = following["name"]
+        result["nextThreshold"] = following["seconds"]
+        result["progress"] = min(1.0, (total_seconds - match["seconds"]) / span) if span > 0 else 1.0
+    return result
+
+
 def view(state):
     palette = theme_colors()
     clients = []
@@ -223,6 +298,10 @@ def cmd_init(_):
 
 def cmd_state(_):
     return {"state": view(load())}
+
+
+def cmd_rank(_):
+    return {"rank": determine_rank(lifetime_seconds(load()))}
 
 
 def cmd_client_add(args):
@@ -375,6 +454,28 @@ def cmd_export(args):
         writer.writerow(["Client", "Note", "Started", "Ended", "Duration (hours)"])
         for entry in entries:
             writer.writerow([names.get(entry["clientId"], "Deleted client"), entry["note"], entry["start"], entry["end"], f'{entry["seconds"] / 3600:.2f}'])
+    rank_info = determine_rank(lifetime_seconds(state))
+    if rank_info:
+        with open(path, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow([])
+            writer.writerow(["Rank Summary"])
+            if rank_info["name"] == "Unranked":
+                writer.writerow(["Rank", "Unranked"])
+            else:
+                writer.writerow(["Rank", f'{rank_info["name"]} · Div {rank_info["division"]}'])
+            writer.writerow(["Lifetime Total", f"{rank_info['totalSeconds'] / 3600:.2f} hours"])
+            if rank_info["nextName"]:
+                remaining_hours = max(0.0, (rank_info["nextThreshold"] - rank_info["totalSeconds"]) / 3600)
+                writer.writerow([
+                    "Next Rank",
+                    rank_info["nextName"],
+                    f"at {rank_info['nextThreshold'] / 3600:.2f} hours",
+                    f"{round((rank_info['progress'] or 0) * 100)}% there",
+                    f"{remaining_hours:.2f} hours to go",
+                ])
+            else:
+                writer.writerow(["Status", "Maximum rank reached"])
     return {"path": path, "count": len(entries), "seconds": sum(entry["seconds"] for entry in entries), "state": view(state)}
 
 
@@ -498,13 +599,14 @@ def cmd_report(args):
         } for day in day_seconds],
         "monthRows": rows,
         "monthTotalSeconds": sum(company_seconds.values()),
+        "rank": determine_rank(lifetime_seconds(state)),
     }}
 
 
 def main():
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
-    for name, func in {"init": cmd_init, "state": cmd_state, "pause": cmd_pause, "resume": cmd_resume, "stop": cmd_stop}.items():
+    for name, func in {"init": cmd_init, "state": cmd_state, "rank": cmd_rank, "pause": cmd_pause, "resume": cmd_resume, "stop": cmd_stop}.items():
         commands.add_parser(name).set_defaults(func=func)
     add = commands.add_parser("client-add")
     add.add_argument("--name", required=True)
