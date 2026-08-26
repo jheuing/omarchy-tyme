@@ -87,6 +87,29 @@ BarWidget {
     var seconds = elapsed(); var h = Math.floor(seconds / 3600); var m = Math.floor((seconds % 3600) / 60); var s = seconds % 60
     return (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s
   }
+  function todayDisplaySummary() {
+    var rows = (todaySummary.rows || []).map(function(row) { return Object.assign({}, row) })
+    var seconds = Number(todaySummary.seconds) || 0
+    if (!active || paused || localDateString(new Date(active.start)) !== localDateString(clock.date))
+      return { rows: rows, seconds: seconds }
+
+    var activeSeconds = elapsed()
+    var found = false
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].clientId === active.clientId) {
+        rows[i].seconds += activeSeconds
+        found = true
+        break
+      }
+    }
+    if (!found) {
+      var company = clientFor(active.clientId)
+      rows.push({ clientId: active.clientId, name: company ? company.name : "Deleted company",
+        color: company ? company.color : Color.accent, seconds: activeSeconds })
+    }
+    rows.sort(function(a, b) { return b.seconds - a.seconds })
+    return { rows: rows, seconds: seconds + activeSeconds }
+  }
   function localDateString(date) {
     return date.getFullYear() + "-" + ("0" + (date.getMonth() + 1)).slice(-2) + "-" + ("0" + date.getDate()).slice(-2)
   }
@@ -680,7 +703,7 @@ BarWidget {
 
           Canvas {
             id: todayDonut
-            property var summary: root.todaySummary
+            property var summary: root.todayDisplaySummary()
             implicitWidth: Math.round(parent.width * 0.5 - parent.spacing / 2)
             implicitHeight: Style.space(148)
             width: implicitWidth
@@ -731,14 +754,18 @@ BarWidget {
               context.textBaseline = "middle"
               context.fillStyle = root.panelForeground
               context.font = "bold " + Style.font.subtitle + "px sans-serif"
-              context.fillText(root.hoursLabel(root.todaySummary.seconds), width / 2, height / 2 - Style.space(6))
+              context.fillText(root.hoursLabel(summary.seconds), width / 2, height / 2 - Style.space(6))
               context.fillStyle = Color.muted
               context.font = "bold " + Style.font.caption + "px sans-serif"
-              context.fillText(root.workdayDifferenceLabel(root.todaySummary.seconds), width / 2, height / 2 + Style.space(10))
+              context.fillText(root.workdayDifferenceLabel(summary.seconds), width / 2, height / 2 + Style.space(10))
             }
             Connections {
               target: root
               function onStateChanged() { todayDonut.requestPaint() }
+            }
+            Connections {
+              target: clock
+              function onDateChanged() { todayDonut.requestPaint() }
             }
           }
 
@@ -749,7 +776,7 @@ BarWidget {
             spacing: Style.space(4)
 
             Repeater {
-              model: root.todaySummary.rows
+              model: root.todayDisplaySummary().rows
               Row {
                 required property var modelData
                 width: parent.width
@@ -780,7 +807,7 @@ BarWidget {
               }
             }
             Text {
-              visible: root.todaySummary.rows.length === 0
+              visible: root.todayDisplaySummary().rows.length === 0
               text: "No time logged today"
               color: Color.muted
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
