@@ -90,7 +90,7 @@ BarWidget {
   function todayDisplaySummary() {
     var rows = (todaySummary.rows || []).map(function(row) { return Object.assign({}, row) })
     var seconds = Number(todaySummary.seconds) || 0
-    if (!active || paused || localDateString(new Date(active.start)) !== localDateString(clock.date))
+    if (!active || localDateString(new Date(active.start)) !== localDateString(clock.date))
       return { rows: rows, seconds: seconds }
 
     var activeSeconds = elapsed()
@@ -252,10 +252,11 @@ BarWidget {
   function selectQuickCompany(company) {
     selectedClientId = company.id
     quickSelectionArmed = true
+    quickCompanyField.text = company.name
     quickCompanyField.forceActiveFocus()
   }
   function primaryTimerAction(stopWhenEmpty) {
-    var company = companyForQuery(quickCompanyField.text) || (selectedClientId ? clientFor(selectedClientId) : null)
+    var company = quickCompanyField.text.trim() === "" ? null : companyForQuery(quickCompanyField.text)
     if (!company) {
       if (stopWhenEmpty && running && quickCompanyField.text.trim() === "") run(["stop"])
       else errorText = "Choose a project from the matches"
@@ -376,7 +377,6 @@ BarWidget {
   onStateChanged: {
     root.workdayHoursSetting = Number(root.state.settings.workdayHours) || 8
     root.menuLabelStyle = root.state.settings.menuLabelStyle || "project"
-    if (!root.selectedClientId && root.state.clients.length) root.selectedClientId = root.state.clients[0].id
   }
   function loadInitialData() {
     if (!timerReady || initialDataLoaded) return
@@ -623,9 +623,8 @@ BarWidget {
         width: parent.width
         placeholderText: root.running ? "Type a company to switch timers" : "Start typing a company name"
         onTextChanged: {
-          var company = root.companyForQuery(text)
-          root.selectedClientId = company ? company.id : ""
-          if (text.trim() === "") root.quickSelectionArmed = false
+          root.selectedClientId = ""
+          root.quickSelectionArmed = false
         }
         onTextEdited: {
           root.quickListOpen = true
@@ -672,7 +671,7 @@ BarWidget {
         placeholderText: "Optional note"
       }
       Button {
-        readonly property var company: root.companyForQuery(quickCompanyField.text) || (root.selectedClientId ? root.clientFor(root.selectedClientId) : null)
+        readonly property var company: quickCompanyField.text.trim() === "" ? null : root.companyForQuery(quickCompanyField.text)
         visible: root.activeTab === "timer"
         width: parent.width
         text: company

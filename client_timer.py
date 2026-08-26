@@ -423,14 +423,6 @@ def cmd_today(_):
             seconds = max(0, int(entry["seconds"]))
             totals[entry["clientId"]] = totals.get(entry["clientId"], 0) + seconds
             segments.append({"clientId": entry["clientId"], "startSeconds": started.hour * 3600 + started.minute * 60 + started.second, "seconds": seconds})
-    active = state["active"]
-    if active and dt.datetime.fromisoformat(active["start"]).astimezone().date() == today:
-        end = dt.datetime.fromisoformat(active["pausedAt"] or now())
-        start = dt.datetime.fromisoformat(active["start"])
-        seconds = max(0, int((end - start).total_seconds()) - active["pausedSeconds"])
-        totals[active["clientId"]] = totals.get(active["clientId"], 0) + seconds
-        local_start = start.astimezone()
-        segments.append({"clientId": active["clientId"], "startSeconds": local_start.hour * 3600 + local_start.minute * 60 + local_start.second, "seconds": seconds})
     companies = {item["id"]: item for item in state["clients"]}
     palette = theme_colors()
     rows = [{
