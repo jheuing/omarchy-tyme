@@ -22,7 +22,7 @@ BarWidget {
   property string errorText: ""
   property string exportText: ""
   property string reportWeek: ""
-  property var report: ({ weekStart: "", weekEnd: "", weekNumber: 0, month: "", days: [], monthRows: [], monthTotalSeconds: 0 })
+  property var report: ({ weekStart: "", weekEnd: "", weekNumber: 0, month: "", days: [], monthRows: [], monthTotalSeconds: 0, rank: null })
   property var todaySummary: ({ rows: [], seconds: 0 })
   property string exportPeriod: "week"
   property string exportCursor: ""
@@ -171,6 +171,64 @@ BarWidget {
     var max = workdayTargetHours() * 3600
     for (var i = 0; i < report.days.length; i++) max = Math.max(max, report.days[i].seconds)
     return max
+  }
+  readonly property var rankColors: ({
+    Mud: "#8B6F47", Wood: "#B08968", Stone: "#9AA0A6", Copper: "#B87333",
+    Bronze: "#CD7F32", Silver: "#C0C0C0", Gold: "#FFD700", Platinum: "#E5E4E2",
+    Diamond: "#B9F2FF", Champion: "#FF6B6B", Grand: "#9B59B6", Super: "#FF4500",
+    B: "#FF1493", "B+": "#FF1493", A: "#FF1493", X: "#FF1493", S: "#FF1493"
+  })
+  readonly property var rankArts: ({
+    Unranked: [" _____ ", "/     \\", "| ??? |", "\\_____/"],
+    Mud: ["   .---.   ", "  / o o \\  ", "( o o o o )", " '-------' "],
+    Wood: ["   /\\   ", "  /  \\  ", " / /\\ \\ ", "/_/  \\_\\", "   ||   ", "  _||_  "],
+    Stone: ["   _____   ", "  /     \\  ", " /       \\ ", "|         |", " \\_______/ "],
+    Copper: [" _________ ", "/         \\", "|    .    |", "|   ...   |", " \\       / ", "  \\_____/  "],
+    Bronze: [" _________ ", "/         \\", "|    =    |", "|   ===   |", " \\       / ", "  \\_____/  "],
+    Silver: [" _________ ", "/         \\", "|    /    |", "|   ///   |", " \\       / ", "  \\_____/  "],
+    Gold: [" _________ ", "/         \\", "|    $    |", "|   $$$   |", " \\       / ", "  \\_____/  "],
+    Platinum: [" _________ ", "/         \\", "|    +    |", "|   +++   |", " \\       / ", "  \\_____/  "],
+    Diamond: ["  _______  ", " /\\     /\\ ", " \\ \\   / / ", "  \\ \\ / /  ", "   \\ V /   ", "    \\_/    "],
+    Champion: ["\\________/", " |______| ", "   |##|   ", "   |__|   ", " _|____|_ "],
+    Grand: [" \\       / ", "  \\_____/  ", " _|     |_ ", "|  * * *  |", "|_________|"],
+    Super: ["   ____  ", "  / / /  ", " / / /   ", "/_/ /    ", "  /_/    "],
+    B: ["█████ ", "██  ██", "█████ ", "██  ██", "█████ "],
+    "B+": ["█████     █ ", "██  ██   ███", "█████     █ ", "██  ██      ", "█████       "],
+    A: ["   █   ", "  █ █  ", " █████ ", " █   █ ", " █   █ "],
+    X: ["█     █", " █   █ ", "  █ █  ", " █   █ ", "█     █"],
+    S: [" ██████ ", "██      ", " █████  ", "      ██", "██████  "]
+  })
+  function rankColorFor(tier) {
+    return root.rankColors[String(tier)] || Color.muted
+  }
+  function rankArtFor(tier) {
+    var art = root.rankArts[String(tier)] || root.rankArts.Unranked
+    return art.join("\n")
+  }
+  function rankLabel() {
+    var info = report.rank
+    if (!info) return ""
+    if (info.name === "Unranked") return "Unranked"
+    return info.name + " · Div " + info.division
+  }
+  function rankPips() {
+    var info = report.rank
+    if (!info || info.name === "Unranked") return ""
+    var out = ""
+    for (var d = 1; d <= 4; d++) out += (d > 1 ? " " : "") + (d <= info.division ? "●" : "○")
+    return out
+  }
+  function rankNextHint() {
+    var info = report.rank
+    if (!info) return ""
+    if (!info.nextName) return "Maximum rank reached"
+    return hoursLabel(Math.max(0, Number(info.nextThreshold) - Number(info.totalSeconds))) + " until " + info.nextName
+  }
+  function rankProgress() {
+    var info = report.rank
+    if (!info) return 0
+    if (info.progress === null || info.progress === undefined) return 1
+    return Math.min(1, Math.max(0, Number(info.progress)))
   }
   function daySegmentOffset(segments, index) {
     var offset = 0
@@ -891,6 +949,69 @@ BarWidget {
       PanelSeparator {
         visible: root.activeTab === "settings"
         width: parent.width
+      }
+      Row {
+        visible: root.activeTab === "reports" && report.rank !== null
+        width: parent.width
+        spacing: Style.space(12)
+
+        Text {
+          id: rankEmblem
+          text: root.rankArtFor(report.rank ? report.rank.tier : "Unranked")
+          color: root.rankColorFor(report.rank ? report.rank.tier : "Unranked")
+          font.family: "monospace"
+          font.pixelSize: Style.font.bodySmall
+          font.bold: true
+          anchors.verticalCenter: parent.verticalCenter
+        }
+
+        Column {
+          width: parent.width - rankEmblem.width - parent.spacing
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: Style.space(4)
+
+          Row {
+            spacing: Style.space(6)
+            Text {
+              text: root.rankLabel()
+              color: root.rankColorFor(report.rank ? report.rank.tier : "")
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.body
+              font.bold: true
+            }
+            Text {
+              text: root.rankPips()
+              color: Color.muted
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.caption
+              anchors.verticalCenter: parent.verticalCenter
+            }
+          }
+          Text {
+            text: report.rank ? root.hoursLabel(Number(report.rank.totalSeconds)) + " tracked" : ""
+            color: Color.muted
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.caption
+          }
+          Rectangle {
+            width: parent.width
+            height: Style.space(6)
+            radius: Style.space(3)
+            color: Style.normalFillFor(root.panelForeground, Color.accent)
+            Rectangle {
+              width: parent.width * root.rankProgress()
+              height: parent.height
+              radius: parent.radius
+              color: root.rankColorFor(report.rank ? report.rank.tier : "")
+            }
+          }
+          Text {
+            text: root.rankNextHint()
+            color: Color.muted
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.caption
+          }
+        }
       }
       Item {
         visible: root.activeTab === "reports"

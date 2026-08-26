@@ -11,7 +11,8 @@ Tyme is a focused, local-first time tracker for the Omarchy bar. Track work by p
 - Use the project picker with typing, mouse selection, or Up/Down and Enter.
 - See today's project-colored 10-hour gauge and progress against a configurable daily target.
 - Review a weekly project breakdown and monthly totals.
-- Export selected ranges as CSV files to `~/Downloads`.
+- Climb a gamified lifetime rank ladder (Unranked to S) shown at the top of Reports, with an ASCII emblem, division pips, and progress toward the next division.
+- Export selected ranges as CSV files to `~/Downloads`, stamped with your current rank summary.
 - Choose project-colored, theme-colored, or plain bar labels.
 
 ## Install
@@ -69,6 +70,12 @@ hyprctl reload
 In the Timer tab, add projects in Settings, then choose one and start tracking. While a timer runs, choose another project to switch directly, or use `Stop now` in the Current section.
 
 The daily target defaults to 8 hours and can be changed in Settings. The gauge always spans 10 hours so extra time remains visible.
+
+## Rank
+
+The Reports tab opens with your current rank: an ASCII emblem tinted by tier, the rank name with division pips (`●●●○`), your lifetime tracked time, and a progress bar toward the next division. The ladder follows the bundled `ranks.csv` (Unranked, Mud, Wood, Stone, Copper, Bronze, Silver, Gold, Platinum, Diamond, Champion, Grand Champion, Super Sonic Legend, then B to S), where each tier has four divisions earned at higher lifetime hour thresholds. The running timer counts toward the total, so the bar moves while you track.
+
+CSV exports end with a `Rank Summary` section recording the achieved rank, lifetime total, and hours remaining until the next rank.
 
 ## Colors
 
